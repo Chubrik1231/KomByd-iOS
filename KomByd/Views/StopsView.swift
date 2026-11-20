@@ -8,19 +8,19 @@ struct StopsView: View {
     @AppStorage("favorite_stops") private var favoriteStopsData: String = ""
 
     private var favoriteStops: [Stop] {
-        let favs = Set(favoriteStopsData.components(separatedBy: ","))
+        let favs = Set(favoriteStopsData.components(separatedBy: ",").filter { !$0.isEmpty })
         return allStops.filter { favs.contains($0.numer) }
     }
 
     private var filteredStops: [Stop] {
-        if searchText.isEmpty {
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if q.isEmpty {
             return allStops
         } else {
-            let query = searchText.lowercased()
             return allStops.filter {
-                $0.displayName.lowercased().contains(query) ||
-                $0.numer.contains(query) ||
-                $0.starynumer.contains(query)
+                $0.displayName.lowercased().contains(q) ||
+                $0.numer.contains(q) ||
+                $0.starynumer.contains(q)
             }
         }
     }
@@ -28,8 +28,8 @@ struct StopsView: View {
     var body: some View {
         NavigationStack {
             List {
-                if !favoriteStops.isEmpty && searchText.isEmpty {
-                    Section(header: Label("Ulubione przystanki", systemImage: "star.fill").foregroundColor(.yellow)) {
+                if searchText.isEmpty && !favoriteStops.isEmpty {
+                    Section(header: Label("Ulubione", systemImage: "star.fill").foregroundColor(.yellow)) {
                         ForEach(favoriteStops) { stop in
                             NavigationLink(destination: StopDetailView(stop: stop)) {
                                 StopRowView(stop: stop)
@@ -38,25 +38,29 @@ struct StopsView: View {
                     }
                 }
 
-                Section(header: Text(searchText.isEmpty ? "Wszystkie przystanki (\(allStops.count))" : "Wyniki wyszukiwania (\(filteredStops.count))")) {
+                Section(header: Text(searchText.isEmpty ? "Wszystkie przystanki (\(allStops.count))" : "Wyniki (\(filteredStops.count))")) {
                     if isLoading && allStops.isEmpty {
                         HStack {
                             Spacer()
-                            ProgressView("Pobieranie bazy przystanków...")
+                            ProgressView("Ładowanie przystanków...")
                             Spacer()
                         }
                         .padding()
                     } else if let error = errorMessage {
                         VStack(spacing: 8) {
                             Text(error)
-                                .font(.subheadline)
                                 .foregroundColor(.red)
+                                .font(.subheadline)
                             Button("Spróbuj ponownie") {
                                 Task { await loadStops() }
                             }
+                            .buttonStyle(.bordered)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding()
                     } else {
-                        ForEach(filteredStops.prefix(100)) { stop in
+                        // Ограничиваем порцию отображения для максимальной плавности
+                        ForEach(filteredStops.prefix(80)) { stop in
                             NavigationLink(destination: StopDetailView(stop: stop)) {
                                 StopRowView(stop: stop)
                             }
@@ -84,7 +88,7 @@ struct StopsView: View {
             let res = try await APIService.shared.fetchStops()
             self.allStops = res
         } catch {
-            self.errorMessage = "Nie udało się pobrać przystanków: \(error.localizedDescription)"
+            self.errorMessage = "Błąd: \(error.localizedDescription)"
         }
         isLoading = false
     }
@@ -94,24 +98,29 @@ struct StopRowView: View {
     let stop: Stop
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(stop.displayName)
                     .font(.system(size: 16, weight: .semibold))
-                Spacer()
-                Text("nr \(stop.numer)")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.15))
-                    .cornerRadius(4)
+                    .foregroundColor(.primary)
+
+                if !stop.cleanDirection.isEmpty {
+                    Text(stop.cleanDirection)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
-            if !stop.cleanDirection.isEmpty {
-                Text(stop.cleanDirection)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
+
+            Spacer()
+
+            Text("nr \(stop.numer)")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color(UIColor.tertiarySystemGroupedBackground))
+                .cornerRadius(6)
         }
         .padding(.vertical, 2)
     }

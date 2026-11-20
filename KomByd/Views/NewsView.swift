@@ -8,39 +8,63 @@ struct NewsView: View {
     var body: some View {
         NavigationStack {
             List {
-                if isLoading && news.isEmpty {
+                Section(header: Text("Informacje o aplikacji")) {
                     HStack {
-                        Spacer()
-                        ProgressView("Pobieranie komunikatów...")
-                        Spacer()
-                    }
-                    .padding()
-                } else if let error = errorMessage {
-                    VStack(spacing: 8) {
-                        Text(error).foregroundColor(.red)
-                        Button("Spróbuj ponownie") {
-                            Task { await loadNews() }
-                        }
-                    }
-                } else if news.isEmpty {
-                    Text("Brak aktywnych komunikatów ZDMiKP")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(news) { item in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(item.cleanTitle)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("KomByd dla iOS")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-
-                            Text(item.cleanDescription)
-                                .font(.subheadline)
+                            Text("Wersja 2.2.1 • ZDMiKP Bydgoszcz")
+                                .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        .padding(.vertical, 6)
+                        Spacer()
+                        Image(systemName: "tram.fill")
+                            .font(.title2)
+                            .foregroundColor(KomBydTheme.accentBlue)
+                    }
+                    .padding(.vertical, 2)
+
+                    Link(destination: URL(string: "https://odjazdy.zdmikp.bydgoszcz.pl")!) {
+                        Label("Strona ZDMiKP Bydgoszcz", systemImage: "safari")
+                    }
+                }
+
+                Section(header: Text("Komunikaty i zmiany tras")) {
+                    if isLoading && news.isEmpty {
+                        HStack {
+                            Spacer()
+                            ProgressView("Pobieranie komunikatów...")
+                            Spacer()
+                        }
+                        .padding()
+                    } else if let error = errorMessage {
+                        VStack(spacing: 8) {
+                            Text(error).foregroundColor(.red)
+                            Button("Spróbuj ponownie") {
+                                Task { await loadNews() }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else if news.isEmpty {
+                        Text("Brak aktywnych komunikatów")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(news) { item in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(item.cleanTitle)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.primary)
+
+                                Text(item.cleanDescription)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 6)
+                        }
                     }
                 }
             }
-            .navigationTitle("Komunikaty")
+            .navigationTitle("Więcej")
             .refreshable {
                 await loadNews()
             }
@@ -59,7 +83,7 @@ struct NewsView: View {
             let res = try await APIService.shared.fetchNews()
             self.news = res
         } catch {
-            self.errorMessage = "Nie udało się pobrać komunikatów: \(error.localizedDescription)"
+            self.errorMessage = "Błąd: \(error.localizedDescription)"
         }
         isLoading = false
     }

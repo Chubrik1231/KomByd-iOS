@@ -1,19 +1,44 @@
 import Foundation
+import CoreLocation
 
 // MARK: - Przystanek (Stop)
 struct Stop: Identifiable, Codable, Hashable {
     var id: String { numer }
-    let nazwa: String
+    let rawNazwa: String
     let numer: String
     let starynumer: String
-    let kierunek: String?
+    let rawKierunek: String?
 
-    var displayName: String {
-        nazwa.decodingHTMLEntities()
+    let displayName: String
+    let cleanDirection: String
+
+    enum CodingKeys: String, CodingKey {
+        case rawNazwa = "nazwa"
+        case numer
+        case starynumer
+        case rawKierunek = "kierunek"
     }
 
-    var cleanDirection: String {
-        (kierunek ?? "").decodingHTMLEntities()
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.rawNazwa = try container.decode(String.self, forKey: .rawNazwa)
+        self.numer = try container.decode(String.self, forKey: .numer)
+        self.starynumer = try container.decode(String.self, forKey: .starynumer)
+        self.rawKierunek = try container.decodeIfPresent(String.self, forKey: .rawKierunek)
+
+        // Декодируем один раз при загрузке данных
+        self.displayName = self.rawNazwa.decodingHTMLEntities()
+        self.cleanDirection = (self.rawKierunek ?? "").decodingHTMLEntities()
+    }
+
+    // Для превью и тестов
+    init(numer: String, starynumer: String, name: String, direction: String?) {
+        self.numer = numer
+        self.starynumer = starynumer
+        self.rawNazwa = name
+        self.rawKierunek = direction
+        self.displayName = name
+        self.cleanDirection = direction ?? ""
     }
 }
 
@@ -25,7 +50,7 @@ struct Line: Identifiable, Codable {
     let kierunki: [LineDirection]?
 
     var isTram: Bool {
-        typ?.uppercased() == "T"
+        typ?.uppercased() == "T" || (Int(numerlinii) ?? 99) <= 12
     }
 
     var isNight: Bool {
@@ -52,7 +77,7 @@ struct LineStop: Identifiable, Codable {
     }
 }
 
-// MARK: - Odjazd w czasie rzeczywistym (Departure)
+// MARK: - Odjazd na żywo (Live Departure)
 struct Departure: Identifiable, Codable {
     var id: String { "\(LineNumber)-\(Hour)-\(Minutes)-\(Direction)" }
     let LineNumber: String
@@ -65,6 +90,10 @@ struct Departure: Identifiable, Codable {
 
     var displayDirection: String {
         Direction.decodingHTMLEntities()
+    }
+
+    var isTram: Bool {
+        (Int(LineNumber) ?? 99) <= 12
     }
 
     var formattedMinutes: String {
@@ -82,14 +111,38 @@ struct NewsItem: Identifiable, Codable {
     let title: String
     let description: String
 
+    var cleanTitle: String {
+        title.decodingHTMLEntities()
+    }
+
     var cleanDescription: String {
         description
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression, range: nil)
             .decodingHTMLEntities()
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+}
 
-    var cleanTitle: String {
-        title.decodingHTMLEntities()
+// MARK: - Bilet Okresowy (Periodic Ticket)
+struct PeriodicTicket: Identifiable, Codable {
+    var id: UUID = UUID()
+    var name: String
+    var lineNumber: String // puste = wszystkie linie
+    var expiryDate: Date
+
+    var isAllLines: Bool {
+        lineNumber.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var daysRemaining: Int {
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfExpiry = calendar.startOfDay(for: expiryDate)
+        let components = calendar.dateComponents([.day], from: startOfToday, to: startOfExpiry)
+        return max(0, components.day ?? 0)
+    }
+
+    var isExpired: Bool {
+        expiryDate < Date()
     }
 }

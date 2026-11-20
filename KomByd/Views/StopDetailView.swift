@@ -5,57 +5,71 @@ struct StopDetailView: View {
     @State private var departures: [Departure] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var lastRefreshTime: Date = Date()
     @AppStorage("favorite_stops") private var favoriteStopsData: String = ""
 
     private var isFavorite: Bool {
-        let favs = favoriteStopsData.components(separatedBy: ",")
+        let favs = favoriteStopsData.components(separatedBy: ",").filter { !$0.isEmpty }
         return favs.contains(stop.numer)
     }
 
     var body: some View {
         List {
+            // Nagłówek przystanku
             Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(stop.displayName)
-                            .font(.title2.bold())
-                        Text("Słupek: nr \(stop.numer) • ID ZDMiKP: \(stop.starynumer)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        if !stop.cleanDirection.isEmpty {
-                            Text("Kierunki: \(stop.cleanDirection)")
-                                .font(.caption)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(stop.displayName)
+                                .font(.title3.bold())
+                                .foregroundColor(.primary)
+                            Text("Słupek nr \(stop.numer) • ZDMiKP: \(stop.starynumer)")
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
+                        Spacer()
+                        Button(action: toggleFavorite) {
+                            Image(systemName: isFavorite ? "star.fill" : "star")
+                                .font(.title2)
+                                .foregroundColor(isFavorite ? .yellow : .gray)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    Spacer()
-                    Button(action: toggleFavorite) {
-                        Image(systemName: isFavorite ? "star.fill" : "star")
-                            .foregroundColor(isFavorite ? .yellow : .gray)
-                            .font(.title2)
+
+                    if !stop.cleanDirection.isEmpty {
+                        Text("Kierunki: \(stop.cleanDirection)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
             }
 
-            Section(header: Text("Rzeczywiste odjazdy (na żywo)")) {
+            // Odjazdy na żywo
+            Section(header: HStack {
+                Text("Odjazdy na żywo (GPS)")
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+            }) {
                 if isLoading && departures.isEmpty {
                     HStack {
                         Spacer()
-                        ProgressView("Ładowanie odjazdów...")
+                        ProgressView("Pobieranie odjazdów...")
                         Spacer()
                     }
-                    .padding()
+                    .padding(.vertical, 12)
                 } else if let error = errorMessage {
-                    VStack(alignment: .center, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
+                    VStack(spacing: 8) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.title)
                             .foregroundColor(.orange)
                         Text(error)
-                            .multilineTextAlignment(.center)
                             .font(.subheadline)
-                        Button("Spróbuj ponownie") {
+                            .multilineTextAlignment(.center)
+                        Button("Odśwież") {
                             Task { await loadDepartures() }
                         }
                         .buttonStyle(.bordered)
@@ -63,11 +77,11 @@ struct StopDetailView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                 } else if departures.isEmpty {
-                    VStack(alignment: .center, spacing: 8) {
+                    VStack(spacing: 8) {
                         Image(systemName: "clock.badge.questionmark")
-                            .font(.largeTitle)
+                            .font(.title)
                             .foregroundColor(.secondary)
-                        Text("Brak planowanych odjazdów w najbliższym czasie")
+                        Text("Brak zaplanowanych odjazdów w najbliższym czasie")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -82,6 +96,15 @@ struct StopDetailView: View {
         }
         .navigationTitle(stop.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    Task { await loadDepartures() }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+            }
+        }
         .refreshable {
             await loadDepartures()
         }
@@ -106,8 +129,9 @@ struct StopDetailView: View {
         do {
             let res = try await APIService.shared.fetchDepartures(oldStopNumber: stop.starynumer)
             self.departures = res
+            self.lastRefreshTime = Date()
         } catch {
-            self.errorMessage = "Błąd pobierania odjazdów: \(error.localizedDescription)"
+            self.errorMessage = "Nie udało się połączyć: \(error.localizedDescription)"
         }
         isLoading = false
     }
