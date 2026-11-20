@@ -2,7 +2,10 @@ import SwiftUI
 
 struct StopDetailView: View {
     let stop: Stop
+    var initialFilterLine: String? = nil
+
     @State private var departures: [Departure] = []
+    @State private var selectedLineFilter: String? = nil
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var lastRefreshTime: Date = Date()
@@ -13,17 +16,24 @@ struct StopDetailView: View {
         return favs.contains(stop.numer)
     }
 
+    private var displayedDepartures: [Departure] {
+        if let filter = selectedLineFilter, !filter.isEmpty {
+            return departures.filter { $0.LineNumber == filter }
+        }
+        return departures
+    }
+
     var body: some View {
         List {
             // Nagłówek przystanku
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(stop.displayName)
                                 .font(.title3.bold())
                                 .foregroundColor(.primary)
-                            Text("Słupek nr \(stop.numer) • ZDMiKP: \(stop.starynumer)")
+                            Text("Słupek nr \(stop.numer) • ID ZDMiKP: \(stop.starynumer)")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -32,6 +42,7 @@ struct StopDetailView: View {
                             Image(systemName: isFavorite ? "star.fill" : "star")
                                 .font(.title2)
                                 .foregroundColor(isFavorite ? .yellow : .gray)
+                                .padding(8)
                         }
                         .buttonStyle(.plain)
                     }
@@ -45,9 +56,44 @@ struct StopDetailView: View {
                 .padding(.vertical, 4)
             }
 
-            // Odjazdy na żywo
+            // Pasek aktywnego filtra linii (jeśli użytkownik przeszedł z konkretnej linii w rozkładzie)
+            if let filter = selectedLineFilter {
+                Section {
+                    HStack(spacing: 12) {
+                        LineBadge(lineNumber: filter, isTram: (Int(filter) ?? 99) <= 12)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tylko linia \(filter)")
+                                .font(.system(size: 15, weight: .bold))
+                            Text("Filtrowanie odjazdów z rozkładu")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            withAnimation {
+                                selectedLineFilter = nil
+                            }
+                        }) {
+                            Text("Pokaż wszystkie")
+                                .font(.caption.bold())
+                                .foregroundColor(KomBydTheme.accentBlue)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(KomBydTheme.accentBlue.opacity(0.12))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // Sekcja odjazdów na żywo
             Section(header: HStack {
-                Text("Odjazdy na żywo (GPS)")
+                Text(selectedLineFilter != nil ? "Odjazdy linii \(selectedLineFilter!)" : "Odjazdy na żywo (GPS)")
                 Spacer()
                 if isLoading {
                     ProgressView()
@@ -57,12 +103,12 @@ struct StopDetailView: View {
                 if isLoading && departures.isEmpty {
                     HStack {
                         Spacer()
-                        ProgressView("Pobieranie odjazdów...")
+                        ProgressView("Pobieranie odjazdów GPS...")
                         Spacer()
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 16)
                 } else if let error = errorMessage {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 10) {
                         Image(systemName: "wifi.exclamationmark")
                             .font(.title)
                             .foregroundColor(.orange)
@@ -76,19 +122,33 @@ struct StopDetailView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                } else if departures.isEmpty {
-                    VStack(spacing: 8) {
+                } else if displayedDepartures.isEmpty {
+                    VStack(spacing: 10) {
                         Image(systemName: "clock.badge.questionmark")
                             .font(.title)
                             .foregroundColor(.secondary)
-                        Text("Brak zaplanowanych odjazdów w najbliższym czasie")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        if let filter = selectedLineFilter {
+                            Text("Brak zaplanowanych odjazdów dla linii \(filter) w najbliższym czasie")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button("Pokaż wszystkie linie na tym przystanku") {
+                                withAnimation {
+                                    selectedLineFilter = nil
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .padding(.top, 4)
+                        } else {
+                            Text("Brak zaplanowanych odjazdów w najbliższym czasie")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .padding(.vertical, 16)
                 } else {
-                    ForEach(departures) { dep in
+                    ForEach(displayedDepartures) { dep in
                         DepartureRowView(departure: dep)
                     }
                 }
@@ -109,6 +169,9 @@ struct StopDetailView: View {
             await loadDepartures()
         }
         .task {
+            if selectedLineFilter == nil && initialFilterLine != nil {
+                selectedLineFilter = initialFilterLine
+            }
             await loadDepartures()
         }
     }
@@ -127,11 +190,20 @@ struct StopDetailView: View {
         isLoading = true
         errorMessage = nil
         do {
-            let res = try await APIService.shared.fetchDepartures(oldStopNumber: stop.starynumer)
+            var oldNumber = stop.starynumer
+            // Если starynumer пустой или равен номеру столба, находим точный номер из базы
+            if oldNumber.isEmpty || oldNumber == stop.numer {
+                let all = try await APIService.shared.fetchStops()
+                if let found = all.first(where: { $0.numer == stop.numer }) {
+                    oldNumber = found.starynumer
+                }
+            }
+
+            let res = try await APIService.shared.fetchDepartures(oldStopNumber: oldNumber)
             self.departures = res
             self.lastRefreshTime = Date()
         } catch {
-            self.errorMessage = "Nie udało się połączyć: \(error.localizedDescription)"
+            self.errorMessage = "Nie udało się połączyć z ZDMiKP: \(error.localizedDescription)"
         }
         isLoading = false
     }

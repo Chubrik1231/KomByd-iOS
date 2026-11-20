@@ -59,7 +59,6 @@ struct StopsView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                     } else {
-                        // Ограничиваем порцию отображения для максимальной плавности
                         ForEach(filteredStops.prefix(80)) { stop in
                             NavigationLink(destination: StopDetailView(stop: stop)) {
                                 StopRowView(stop: stop)
@@ -98,8 +97,8 @@ struct StopRowView: View {
     let stop: Stop
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(stop.displayName)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
@@ -115,13 +114,14 @@ struct StopRowView: View {
             Spacer()
 
             Text("nr \(stop.numer)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
                 .background(Color(UIColor.tertiarySystemGroupedBackground))
-                .cornerRadius(6)
+                .cornerRadius(8)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle()) // Уверенное и легкое нажатие по всей строке
     }
 }

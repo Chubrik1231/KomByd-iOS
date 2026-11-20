@@ -8,15 +8,26 @@ struct Stop: Identifiable, Codable, Hashable {
     let numer: String
     let starynumer: String
     let rawKierunek: String?
+    let lat: String?
+    let lng: String?
 
     let displayName: String
     let cleanDirection: String
+
+    var coordinate: CLLocationCoordinate2D? {
+        guard let latStr = lat, let lngStr = lng,
+              let latVal = Double(latStr), let lngVal = Double(lngStr),
+              latVal != 0, lngVal != 0 else { return nil }
+        return CLLocationCoordinate2D(latitude: latVal, longitude: lngVal)
+    }
 
     enum CodingKeys: String, CodingKey {
         case rawNazwa = "nazwa"
         case numer
         case starynumer
         case rawKierunek = "kierunek"
+        case lat
+        case lng
     }
 
     init(from decoder: Decoder) throws {
@@ -25,18 +36,22 @@ struct Stop: Identifiable, Codable, Hashable {
         self.numer = try container.decode(String.self, forKey: .numer)
         self.starynumer = try container.decode(String.self, forKey: .starynumer)
         self.rawKierunek = try container.decodeIfPresent(String.self, forKey: .rawKierunek)
+        self.lat = try container.decodeIfPresent(String.self, forKey: .lat)
+        self.lng = try container.decodeIfPresent(String.self, forKey: .lng)
 
         // Декодируем один раз при загрузке данных
         self.displayName = self.rawNazwa.decodingHTMLEntities()
         self.cleanDirection = (self.rawKierunek ?? "").decodingHTMLEntities()
     }
 
-    // Для превью и тестов
-    init(numer: String, starynumer: String, name: String, direction: String?) {
+    // Для инициализации вручную и резервных вариантов
+    init(numer: String, starynumer: String, name: String, direction: String?, lat: String? = nil, lng: String? = nil) {
         self.numer = numer
         self.starynumer = starynumer
         self.rawNazwa = name
         self.rawKierunek = direction
+        self.lat = lat
+        self.lng = lng
         self.displayName = name
         self.cleanDirection = direction ?? ""
     }
@@ -127,7 +142,7 @@ struct NewsItem: Identifiable, Codable {
 struct PeriodicTicket: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
-    var lineNumber: String // puste = wszystkie linie
+    var lineNumber: String
     var expiryDate: Date
 
     var isAllLines: Bool {

@@ -30,16 +30,16 @@ struct LineBadge: View {
         Text(lineNumber)
             .font(.system(size: 15, weight: .bold, design: .rounded))
             .foregroundColor(.white)
-            .frame(minWidth: 42)
+            .frame(minWidth: 44, minHeight: 28)
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, 4)
             .background(backgroundColor)
             .cornerRadius(8)
             .shadow(color: backgroundColor.opacity(0.3), radius: 2, y: 1)
     }
 }
 
-// MARK: - Przycisk na pulpicie (Dashboard Card)
+// MARK: - Przycisk na pulpicie (Dashboard Card) z powiększoną strefą dotyku
 struct DashboardButton: View {
     let title: String
     let subtitle: String
@@ -49,38 +49,39 @@ struct DashboardButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     ZStack {
                         Circle()
                             .fill(color.opacity(0.15))
-                            .frame(width: 44, height: 44)
+                            .frame(width: 48, height: 48)
                         Image(systemName: icon)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundColor(color)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundColor(Color(UIColor.tertiaryLabel))
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.leading)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
                         .lineLimit(1)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 105, alignment: .leading)
             .background(KomBydTheme.cardBackground)
-            .cornerRadius(16)
+            .cornerRadius(18)
+            .contentShape(Rectangle()) // Вся площадь карточки 100% кликабельна
             .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
@@ -130,5 +131,6 @@ struct DepartureRowView: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 }

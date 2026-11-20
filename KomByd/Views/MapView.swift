@@ -1,8 +1,8 @@
 import SwiftUI
 import MapKit
 
-struct MapStopItem: Identifiable {
-    let id: String
+struct MapStopAnnotation: Identifiable {
+    var id: String { stop.numer }
     let stop: Stop
     let coordinate: CLLocationCoordinate2D
 }
@@ -10,23 +10,48 @@ struct MapStopItem: Identifiable {
 struct MapView: View {
     let stops: [Stop]
 
-    // Centrum Bydgoszczy (Stary Rynek / Rondo Jagiellonów)
+    // Bydgoszcz centrum (Rondo Jagiellonów)
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 53.1235, longitude: 18.0084),
-        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
     )
 
     @State private var selectedStop: Stop?
 
+    private var annotations: [MapStopAnnotation] {
+        stops.compactMap { stop in
+            if let coord = stop.coordinate {
+                return MapStopAnnotation(stop: stop, coordinate: coord)
+            }
+            return nil
+        }
+    }
+
     var body: some View {
         ZStack {
-            Map(coordinateRegion: $region)
-                .edgesIgnoringSafeArea(.bottom)
+            Map(coordinateRegion: $region, annotationItems: annotations.prefix(150)) { item in
+                MapAnnotation(coordinate: item.coordinate) {
+                    Button(action: {
+                        selectedStop = item.stop
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(KomBydTheme.accentBlue)
+                                .frame(width: 30, height: 30)
+                                .shadow(radius: 3)
+                            Image(systemName: "tram.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+            }
+            .edgesIgnoringSafeArea(.bottom)
 
             VStack {
                 Spacer()
                 if let stop = selectedStop {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(stop.displayName)
@@ -37,20 +62,20 @@ struct MapView: View {
                             }
                             Spacer()
                             NavigationLink(destination: StopDetailView(stop: stop)) {
-                                Text("Odjazdy")
+                                Text("Odjazdy GPS")
                                     .font(.subheadline.bold())
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 14)
-                                    .padding(.vertical, 7)
+                                    .padding(.vertical, 8)
                                     .background(KomBydTheme.accentBlue)
-                                    .cornerRadius(8)
+                                    .cornerRadius(10)
                             }
                         }
                     }
-                    .padding()
+                    .padding(16)
                     .background(KomBydTheme.cardBackground)
-                    .cornerRadius(16)
-                    .shadow(radius: 8)
+                    .cornerRadius(18)
+                    .shadow(color: Color.black.opacity(0.15), radius: 10, y: 5)
                     .padding()
                 }
             }

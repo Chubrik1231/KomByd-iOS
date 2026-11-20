@@ -5,9 +5,7 @@ struct DashboardView: View {
     @State private var allStops: [Stop] = []
     @State private var latestNews: NewsItem?
     @State private var searchText: String = ""
-    @State private var isShowingSearch = false
-    @State private var isShowingTickets = false
-    @State private var isShowingMap = false
+    @FocusState private var isSearchFocused: Bool
     @AppStorage("favorite_stops") private var favoriteStopsData: String = ""
 
     private var favoriteStops: [Stop] {
@@ -16,10 +14,10 @@ struct DashboardView: View {
     }
 
     private var searchResults: [Stop] {
-        if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if q.isEmpty {
             return []
         }
-        let q = searchText.lowercased()
         return allStops.filter {
             $0.displayName.lowercased().contains(q) ||
             $0.numer.contains(q) ||
@@ -32,7 +30,7 @@ struct DashboardView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     // MARK: - Górny nagłówek KomByd
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("KomByd")
@@ -52,34 +50,51 @@ struct DashboardView: View {
                                 Image(systemName: "ticket.fill")
                                     .font(.system(size: 20))
                                     .foregroundColor(KomBydTheme.accentBlue)
-                                    .padding(10)
+                                    .padding(12)
                                     .background(KomBydTheme.accentBlue.opacity(0.12))
                                     .clipShape(Circle())
                             }
                         }
 
-                        // Szybkie pole wyszukiwania
-                        HStack {
+                        // MARK: - DUŻE POLE WYSZUKIWANIA Z POWIĘKSZONĄ STREFĄ KLIKNIĘCIA
+                        HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(KomBydTheme.accentBlue)
+                                .frame(width: 30, height: 30)
+
                             TextField("Szukaj przystanku po nazwie lub numerze...", text: $searchText)
+                                .font(.system(size: 16))
                                 .textFieldStyle(.plain)
+                                .frame(minHeight: 44) // Wygodna duża wysokość dotyku
+                                .focused($isSearchFocused)
+
                             if !searchText.isEmpty {
-                                Button(action: { searchText = "" }) {
+                                Button(action: {
+                                    searchText = ""
+                                }) {
                                     Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 20))
                                         .foregroundColor(.secondary)
+                                        .padding(8)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
-                        .padding(12)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                         .background(KomBydTheme.cardBackground)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.03), radius: 4, y: 2)
+                        .cornerRadius(16)
+                        .contentShape(Rectangle()) // Cały prostokąt reaguje na dotyk
+                        .onTapGesture {
+                            isSearchFocused = true
+                        }
+                        .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                    // Wyniki szybkiego wyszukiwania (jeśli wpisano tekst)
+                    // Wyniki szybkiego wyszukiwania
                     if !searchResults.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Wyniki wyszukiwania (\(searchResults.count))")
@@ -91,7 +106,7 @@ struct DashboardView: View {
                                     NavigationLink(destination: StopDetailView(stop: stop)) {
                                         StopRowView(stop: stop)
                                             .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
+                                            .padding(.vertical, 12) // Duża strefa kliknięcia wiersza
                                     }
                                     Divider()
                                 }
@@ -112,7 +127,7 @@ struct DashboardView: View {
                             // 1. Wyszukaj przystanek
                             DashboardButton(
                                 title: "Przystanki",
-                                subtitle: "Szukaj i lista",
+                                subtitle: "Wyszukaj i lista",
                                 icon: "magnifyingglass",
                                 color: KomBydTheme.accentBlue
                             ) {
@@ -175,7 +190,7 @@ struct DashboardView: View {
                                     NavigationLink(destination: StopDetailView(stop: stop)) {
                                         StopRowView(stop: stop)
                                             .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
+                                            .padding(.vertical, 12)
                                     }
                                     Divider()
                                 }
@@ -212,7 +227,7 @@ struct DashboardView: View {
                                     .foregroundColor(.secondary)
                                     .lineLimit(3)
                             }
-                            .padding(14)
+                            .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(KomBydTheme.cardBackground)
                             .cornerRadius(16)
@@ -254,36 +269,37 @@ struct DashboardButtonCard: View {
     let color: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 ZStack {
                     Circle()
                         .fill(color.opacity(0.15))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 48, height: 48)
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(color)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Color(UIColor.tertiaryLabel))
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.primary)
                 Text(subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 105, alignment: .leading)
         .background(KomBydTheme.cardBackground)
-        .cornerRadius(16)
+        .cornerRadius(18)
+        .contentShape(Rectangle()) // Вся площадь карточки 100% кликабельна
         .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
     }
 }

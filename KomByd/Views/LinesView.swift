@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LinesView: View {
     @State private var lines: [Line] = []
+    @State private var allStops: [Stop] = []
     @State private var selectedCategory: Int = 0
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -51,14 +52,15 @@ struct LinesView: View {
                         VStack(spacing: 8) {
                             Text(error).foregroundColor(.red)
                             Button("Spróbuj ponownie") {
-                                Task { await loadLines() }
+                                Task { await loadData() }
                             }
                         }
                         .frame(maxWidth: .infinity)
                     } else {
                         ForEach(displayedLines) { line in
-                            NavigationLink(destination: LineDetailView(line: line)) {
+                            NavigationLink(destination: LineDetailView(line: line, allStops: allStops)) {
                                 LineRowItem(line: line)
+                                    .padding(.vertical, 4)
                             }
                         }
                     }
@@ -66,24 +68,27 @@ struct LinesView: View {
             }
             .navigationTitle("Rozkład jazdy")
             .refreshable {
-                await loadLines()
+                await loadData()
             }
             .task {
-                if lines.isEmpty {
-                    await loadLines()
+                if lines.isEmpty || allStops.isEmpty {
+                    await loadData()
                 }
             }
         }
     }
 
-    private func loadLines() async {
+    private func loadData() async {
         isLoading = true
         errorMessage = nil
         do {
-            let res = try await APIService.shared.fetchLines()
-            self.lines = res
+            async let fetchL = APIService.shared.fetchLines()
+            async let fetchS = APIService.shared.fetchStops()
+            let (linesRes, stopsRes) = try await (fetchL, fetchS)
+            self.lines = linesRes
+            self.allStops = stopsRes
         } catch {
-            self.errorMessage = "Błąd: \(error.localizedDescription)"
+            self.errorMessage = "Błąd pobierania danych: \(error.localizedDescription)"
         }
         isLoading = false
     }
@@ -98,7 +103,7 @@ struct LineRowItem: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             LineBadge(lineNumber: line.numerlinii, isTram: line.isTram)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Linia \(line.numerlinii)")
@@ -111,12 +116,15 @@ struct LineRowItem: View {
                 }
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
+// MARK: - Szczegóły trasy linii ze wszystkimi przystankami
 struct LineDetailView: View {
     let line: Line
+    var allStops: [Stop] = []
 
     var body: some View {
         List {
@@ -124,18 +132,40 @@ struct LineDetailView: View {
                 ForEach(dirs) { dir in
                     Section(header: Text("Kierunek: \(dir.displayDirection)").font(.subheadline.bold())) {
                         if let stops = dir.przystanki {
-                            ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
-                                HStack(spacing: 12) {
-                                    Text("\(index + 1)")
-                                        .font(.caption.bold())
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 24, height: 24)
-                                        .background(Color(UIColor.tertiarySystemGroupedBackground))
-                                        .clipShape(Circle())
-                                    Text(stop.displayName)
-                                        .font(.system(size: 15, weight: .medium))
+                            ForEach(Array(stops.enumerated()), id: \.offset) { index, lineStop in
+                                let matchedStop = allStops.first(where: { $0.numer == lineStop.id }) ??
+                                    Stop(numer: lineStop.id, starynumer: lineStop.id, name: lineStop.displayName, direction: dir.displayDirection)
+
+                                // Kliknięcie w przystanek otwiera odjazdy z filtrem na tę linię!
+                                NavigationLink(destination: StopDetailView(stop: matchedStop, initialFilterLine: line.numerlinii)) {
+                                    HStack(spacing: 14) {
+                                        Text("\(index + 1)")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 28, height: 28)
+                                            .background(Color(UIColor.tertiarySystemGroupedBackground))
+                                            .clipShape(Circle())
+
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(lineStop.displayName)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.primary)
+
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(KomBydTheme.liveGreen)
+                                                    .frame(width: 6, height: 6)
+                                                Text("Zobacz odjazdy GPS linii \(line.numerlinii)")
+                                                    .font(.caption)
+                                                    .foregroundColor(KomBydTheme.accentBlue)
+                                            }
+                                        }
+
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.vertical, 2)
                             }
                         }
                     }
